@@ -30,6 +30,7 @@ const app = createApp();
 const meRoute = createRoute({
 	method: 'get',
 	path: '/me',
+	operationId: 'me',
 	tags: ['Auth'],
 	summary: 'Get current user info',
 	responses: {
@@ -58,6 +59,7 @@ app.openapi(meRoute, (c) => {
 const versionRoute = createRoute({
 	method: 'get',
 	path: '/version',
+	operationId: 'version',
 	tags: ['System'],
 	summary: 'Get the deployment version',
 	description:
@@ -80,6 +82,7 @@ app.openapi(versionRoute, (c) => {
 const capabilitiesRoute = createRoute({
 	method: 'get',
 	path: '/capabilities',
+	operationId: 'capabilities',
 	tags: ['System'],
 	summary: 'Get deployment capability flags',
 	responses: {

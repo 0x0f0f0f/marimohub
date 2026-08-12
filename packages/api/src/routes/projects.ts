@@ -122,6 +122,7 @@ function projectResponse(project: Project, subject: AuthSubject, policy?: AuthzP
 const listProjects = createRoute({
 	method: 'get',
 	path: '/projects',
+	operationId: 'projects.list',
 	tags: ['Projects'],
 	summary: 'List all projects',
 	request: { query: PaginationQuery },
@@ -141,6 +142,7 @@ const listProjects = createRoute({
 const createProject = createRoute({
 	method: 'post',
 	path: '/projects',
+	operationId: 'projects.create',
 	tags: ['Projects'],
 	summary: 'Create a project',
 	request: { headers: IdempotencyKeyHeader, body: jsonBody(CreateProjectBody) },
@@ -156,6 +158,7 @@ const createProject = createRoute({
 const getProject = createRoute({
 	method: 'get',
 	path: '/projects/{pid}',
+	operationId: 'projects.get',
 	tags: ['Projects'],
 	summary: 'Get a project',
 	request: { params: ProjectIdParam },
@@ -173,6 +176,7 @@ const getProject = createRoute({
 const updateProject = createRoute({
 	method: 'patch',
 	path: '/projects/{pid}',
+	operationId: 'projects.update',
 	tags: ['Projects'],
 	summary: 'Update a project',
 	request: { params: ProjectIdParam, headers: IfMatchHeader, body: jsonBody(UpdateProjectBody) },
@@ -190,6 +194,7 @@ const updateProject = createRoute({
 const deleteProject = createRoute({
 	method: 'delete',
 	path: '/projects/{pid}',
+	operationId: 'projects.delete',
 	tags: ['Projects'],
 	summary: 'Delete a project',
 	request: { params: ProjectIdParam, headers: IfMatchHeader },
@@ -203,6 +208,7 @@ const deleteProject = createRoute({
 const listMembers = createRoute({
 	method: 'get',
 	path: '/projects/{pid}/members',
+	operationId: 'projects.members.list',
 	tags: ['Projects'],
 	summary: 'List project members',
 	description:
@@ -222,6 +228,7 @@ const listMembers = createRoute({
 const addMember = createRoute({
 	method: 'post',
 	path: '/projects/{pid}/members',
+	operationId: 'projects.members.add',
 	tags: ['Projects'],
 	summary: 'Add a project member',
 	description:
@@ -241,6 +248,7 @@ const addMember = createRoute({
 const updateMember = createRoute({
 	method: 'put',
 	path: '/projects/{pid}/members/{uid}',
+	operationId: 'projects.members.update',
 	tags: ['Projects'],
 	summary: "Change a member's role",
 	request: { params: MemberIdParam, body: jsonBody(UpdateMemberRoleBody) },
@@ -257,6 +265,7 @@ const updateMember = createRoute({
 const removeMember = createRoute({
 	method: 'delete',
 	path: '/projects/{pid}/members/{uid}',
+	operationId: 'projects.members.remove',
 	tags: ['Projects'],
 	summary: 'Remove a project member',
 	request: { params: MemberIdParam },

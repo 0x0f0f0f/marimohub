@@ -16,6 +16,7 @@ import { pageSchema } from '../pagination';
 const listUsers = createRoute({
 	method: 'get',
 	path: '/admin/users',
+	operationId: 'admin.users.list',
 	tags: ['Admin'],
 	summary: 'List all users in the identity directory',
 	description:
@@ -39,6 +40,7 @@ const listUsers = createRoute({
 const getConfig = createRoute({
 	method: 'get',
 	path: '/admin/config',
+	operationId: 'admin.config.get',
 	tags: ['Admin'],
 	summary: "Describe the deployment's configuration",
 	description:

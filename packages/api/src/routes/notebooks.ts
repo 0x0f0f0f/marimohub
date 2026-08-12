@@ -182,6 +182,7 @@ const VersionIdParam = NotebookIdParam.extend({
 const listNotebooks = createRoute({
 	method: 'get',
 	path: '/projects/{pid}/notebooks',
+	operationId: 'notebooks.list',
 	tags: ['Notebooks'],
 	summary: 'List notebooks in a project',
 	request: { params: ProjectIdParam, query: PaginationQuery },
@@ -201,6 +202,7 @@ const listNotebooks = createRoute({
 const createNotebook = createRoute({
 	method: 'post',
 	path: '/projects/{pid}/notebooks',
+	operationId: 'notebooks.create',
 	tags: ['Notebooks'],
 	summary: 'Create a notebook',
 	request: {
@@ -221,6 +223,7 @@ const createNotebook = createRoute({
 const createGitNotebook = createRoute({
 	method: 'post',
 	path: '/projects/{pid}/notebooks/git',
+	operationId: 'notebooks.create-git',
 	tags: ['Notebooks'],
 	summary: 'Create a git-synced workspace notebook',
 	request: { params: ProjectIdParam, body: jsonBody(CreateGitNotebookBody) },
@@ -237,6 +240,7 @@ const createGitNotebook = createRoute({
 const rotateSyncToken = createRoute({
 	method: 'post',
 	path: '/projects/{pid}/notebooks/{nid}/sync-token/rotate',
+	operationId: 'notebooks.rotate-sync-token',
 	tags: ['Notebooks'],
 	summary: 'Rotate a notebook sync token',
 	request: { params: NotebookIdParam },
@@ -253,6 +257,7 @@ const rotateSyncToken = createRoute({
 const updateGitSource = createRoute({
 	method: 'patch',
 	path: '/projects/{pid}/notebooks/{nid}/source',
+	operationId: 'notebooks.update-source',
 	tags: ['Notebooks'],
 	summary: 'Update a git-synced notebook source',
 	request: { params: NotebookIdParam, body: jsonBody(UpdateGitSourceBody) },
@@ -272,6 +277,7 @@ const updateGitSource = createRoute({
 const getNotebook = createRoute({
 	method: 'get',
 	path: '/projects/{pid}/notebooks/{nid}',
+	operationId: 'notebooks.get',
 	tags: ['Notebooks'],
 	summary: 'Get notebook metadata',
 	request: { params: NotebookIdParam },
@@ -289,6 +295,7 @@ const getNotebook = createRoute({
 const getNotebookContent = createRoute({
 	method: 'get',
 	path: '/projects/{pid}/notebooks/{nid}/content',
+	operationId: 'notebooks.content',
 	tags: ['Notebooks'],
 	summary: 'Get notebook code',
 	request: { params: NotebookIdParam },
@@ -308,6 +315,7 @@ const getNotebookContent = createRoute({
 const updateNotebook = createRoute({
 	method: 'patch',
 	path: '/projects/{pid}/notebooks/{nid}',
+	operationId: 'notebooks.update',
 	tags: ['Notebooks'],
 	summary: 'Update a notebook',
 	request: { params: NotebookIdParam, headers: IfMatchHeader, body: jsonBody(UpdateNotebookBody) },
@@ -325,6 +333,7 @@ const updateNotebook = createRoute({
 const deleteNotebook = createRoute({
 	method: 'delete',
 	path: '/projects/{pid}/notebooks/{nid}',
+	operationId: 'notebooks.delete',
 	tags: ['Notebooks'],
 	summary: 'Delete a notebook (soft-delete)',
 	request: { params: NotebookIdParam, headers: IfMatchHeader },
@@ -338,6 +347,7 @@ const deleteNotebook = createRoute({
 const listVersions = createRoute({
 	method: 'get',
 	path: '/projects/{pid}/notebooks/{nid}/versions',
+	operationId: 'notebooks.versions.list',
 	tags: ['Notebooks'],
 	summary: 'List notebook versions',
 	request: { params: NotebookIdParam, query: PaginationQuery },
@@ -357,6 +367,7 @@ const listVersions = createRoute({
 const getVersion = createRoute({
 	method: 'get',
 	path: '/projects/{pid}/notebooks/{nid}/versions/{vid}',
+	operationId: 'notebooks.versions.get',
 	tags: ['Notebooks'],
 	summary: 'Get a specific version',
 	request: { params: VersionIdParam },
@@ -376,6 +387,7 @@ const getVersion = createRoute({
 const getNotebookHtml = createRoute({
 	method: 'get',
 	path: '/projects/{pid}/notebooks/{nid}/html',
+	operationId: 'notebooks.html',
 	tags: ['Notebooks'],
 	summary: "Latest HTML snapshot of the notebook's outputs",
 	description:
@@ -397,6 +409,7 @@ const getNotebookHtml = createRoute({
 const getVersionHtml = createRoute({
 	method: 'get',
 	path: '/projects/{pid}/notebooks/{nid}/versions/{vid}/html',
+	operationId: 'notebooks.versions.html',
 	tags: ['Notebooks'],
 	summary: "One version's HTML snapshot of the notebook's outputs",
 	description:
@@ -416,6 +429,7 @@ const getVersionHtml = createRoute({
 const restoreVersion = createRoute({
 	method: 'post',
 	path: '/projects/{pid}/notebooks/{nid}/versions/{vid}/restore',
+	operationId: 'notebooks.versions.restore',
 	tags: ['Notebooks'],
 	summary: 'Restore a version as a new save',
 	request: { params: VersionIdParam },
@@ -432,6 +446,7 @@ const restoreVersion = createRoute({
 const duplicateNotebook = createRoute({
 	method: 'post',
 	path: '/projects/{pid}/notebooks/{nid}/duplicate',
+	operationId: 'notebooks.duplicate',
 	tags: ['Notebooks'],
 	summary: 'Duplicate a notebook',
 	request: {
