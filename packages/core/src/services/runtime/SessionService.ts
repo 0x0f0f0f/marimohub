@@ -34,6 +34,7 @@ import {
 } from '../../schema';
 import type { EditorClaim, Session, SurfaceState } from '../../schema';
 import type { SurfaceId } from './surfaces/types';
+import { assertValidKernelAuthToken } from './kernelAuth';
 import {
 	ACTIVE_STATUSES,
 	isTerminal,
@@ -51,6 +52,7 @@ export interface CreateSessionInput {
 	user_id: UserId;
 	runtime?: { python_version?: string; marimo_version?: string };
 	sandbox_id?: SandboxId;
+	kernel_auth_token?: string;
 	sandbox_url?: string;
 	compute_profile?: string;
 	compute_resources?: Session['compute_resources'];
@@ -141,6 +143,9 @@ export class SessionService {
 	}
 
 	async createSession(input: CreateSessionInput): Promise<Session> {
+		if (input.kernel_auth_token !== undefined) {
+			assertValidKernelAuthToken(input.kernel_auth_token);
+		}
 		const sessionId = input.session_id ?? createSessionId();
 		const now = new Date().toISOString();
 
@@ -163,6 +168,7 @@ export class SessionService {
 				: {}),
 			runtime: input.runtime,
 			sandbox_id: input.sandbox_id,
+			kernel_auth_token: input.kernel_auth_token,
 			sandbox_url: input.sandbox_url,
 			compute_profile: input.compute_profile,
 			compute_resources: input.compute_resources,

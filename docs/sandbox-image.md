@@ -68,8 +68,13 @@ reusing the image's pre-installed environment. With cwd `/workspace`:
 
 ```sh
 uv sync --inexact --no-install-package marimo --no-compile-bytecode --no-build   # add the notebook's deps (skipped when it declares none)
-uv run --no-sync marimo edit notebook.py --headless --no-token --host 0.0.0.0 --port 2718
+uv run --no-sync marimo --quiet edit notebook.py --headless --token --token-password-file /tmp/.marimohub-kernel-token --host 0.0.0.0 --port 2718
 ```
+
+The provisioner creates the password file after it writes other session
+credentials. The file is outside `/workspace`, so workspace snapshots cannot
+capture it. Custom images must use a marimo version that supports
+`--token-password-file`. The supported 0.23.10 and 0.24.x images provide it.
 
 During the sync, `--no-install-package marimo` keeps the image's pinned marimo
 version even if the notebook declares another version. `--no-build` permits only
@@ -108,6 +113,14 @@ So your image must provide:
    pre-installed base.
 
 No marimo entrypoint or `CMD` is required — marimohub supplies the launch command.
+The repository images use a generated token in their quiet default `CMD`. For a
+standalone check, publish the port and read the token from the container:
+
+```sh
+cid=$(docker run -d -p 127.0.0.1:2718:2718 IMAGE)
+token=$(docker exec "$cid" cat /tmp/.marimohub-kernel-token)
+printf 'http://127.0.0.1:2718/?access_token=%s\n' "$token"
+```
 
 > **Don't set `UV_COMPILE_BYTECODE` in your image.** Compile bytecode at build with
 > the `--compile-bytecode` flag (fast imports for the pre-installed base). The
