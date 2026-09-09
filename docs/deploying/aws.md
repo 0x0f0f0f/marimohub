@@ -4,8 +4,8 @@ description: Deploy marimohub using AWS compute, S3 storage, identity, and netwo
 
 # Deploying on AWS
 
-Run the `apps/server` image on EKS or ECS/Fargate, backed by native S3 and a
-compute backend (Modal today; no AWS-native compute adapter yet).
+Run the `apps/server` image on EKS or ECS/Fargate, backed by native S3. ECS
+deployments can run kernels with the AWS-native Fargate adapter.
 
 > Outline — not yet a tested recipe. Contributions welcome.
 
@@ -29,9 +29,11 @@ MARIMOHUB_STORAGE_S3_REGION=us-east-1
 
 ## Compute
 
-```bash
-MARIMOHUB_COMPUTE_BACKEND=modal   # + Modal token/image (see Compute)
-```
+Use the [Fargate compute setup](../compute.md#aws-ecs-fargate) to run kernels on
+ECS. The repository includes an [example task definition](../../examples/aws-fargate/kernel-task-definition.json)
+and a [hub IAM policy](../../examples/aws-fargate/hub-iam-policy.json).
+Use ECS task roles for the hub and notebook tasks. Do not configure static AWS
+access keys.
 
 ## Config & secrets
 

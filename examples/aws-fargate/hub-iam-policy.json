@@ -1,0 +1,92 @@
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Sid": "RunApprovedKernelTasks",
+			"Effect": "Allow",
+			"Action": "ecs:RunTask",
+			"Resource": "arn:aws:ecs:us-east-1:123456789012:task-definition/marimohub-kernel:1",
+			"Condition": {
+				"ArnEquals": {
+					"ecs:cluster": "arn:aws:ecs:us-east-1:123456789012:cluster/marimohub"
+				}
+			}
+		},
+		{
+			"Sid": "ListTasksInConfiguredCluster",
+			"Effect": "Allow",
+			"Action": "ecs:ListTasks",
+			"Resource": "*",
+			"Condition": {
+				"ArnEquals": {
+					"ecs:cluster": "arn:aws:ecs:us-east-1:123456789012:cluster/marimohub"
+				}
+			}
+		},
+		{
+			"Sid": "InspectOwnedTasks",
+			"Effect": "Allow",
+			"Action": ["ecs:DescribeTasks", "ecs:ListTagsForResource"],
+			"Resource": "arn:aws:ecs:us-east-1:123456789012:task/marimohub/*",
+			"Condition": {
+				"ArnEquals": {
+					"ecs:cluster": "arn:aws:ecs:us-east-1:123456789012:cluster/marimohub"
+				},
+				"StringEquals": {
+					"aws:ResourceTag/marimohub:owner": "prod-hub-a"
+				}
+			}
+		},
+		{
+			"Sid": "StopOwnedTasks",
+			"Effect": "Allow",
+			"Action": "ecs:StopTask",
+			"Resource": "arn:aws:ecs:us-east-1:123456789012:task/marimohub/*",
+			"Condition": {
+				"ArnEquals": {
+					"ecs:cluster": "arn:aws:ecs:us-east-1:123456789012:cluster/marimohub"
+				},
+				"StringEquals": {
+					"aws:ResourceTag/marimohub:owner": "prod-hub-a"
+				}
+			}
+		},
+		{
+			"Sid": "DescribeConfiguredCluster",
+			"Effect": "Allow",
+			"Action": "ecs:DescribeClusters",
+			"Resource": "arn:aws:ecs:us-east-1:123456789012:cluster/marimohub"
+		},
+		{
+			"Sid": "DescribeTaskDefinitions",
+			"Effect": "Allow",
+			"Action": "ecs:DescribeTaskDefinition",
+			"Resource": "*"
+		},
+		{
+			"Sid": "TagRunTaskResources",
+			"Effect": "Allow",
+			"Action": "ecs:TagResource",
+			"Resource": "arn:aws:ecs:us-east-1:123456789012:task/marimohub/*",
+			"Condition": {
+				"StringEquals": {
+					"ecs:CreateAction": "RunTask"
+				}
+			}
+		},
+		{
+			"Sid": "PassOnlyKernelRoles",
+			"Effect": "Allow",
+			"Action": "iam:PassRole",
+			"Resource": [
+				"arn:aws:iam::123456789012:role/marimohub-kernel-execution",
+				"arn:aws:iam::123456789012:role/marimohub-kernel-task"
+			],
+			"Condition": {
+				"StringEquals": {
+					"iam:PassedToService": "ecs-tasks.amazonaws.com"
+				}
+			}
+		}
+	]
+}

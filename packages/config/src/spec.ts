@@ -719,6 +719,89 @@ export const CONFIG_SPEC: ConfigGroup[] = [
 				],
 			},
 			{
+				name: 'AWS ECS Fargate',
+				selectorValue: 'fargate',
+				supportsComputeProfiles: true,
+				description:
+					'Runs one Linux Fargate task per sandbox. The hub connects through private task ENIs. This backend requires proxy exposure and uses on-demand capacity.',
+				vars: [
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_CLUSTER',
+						name: 'Fargate cluster',
+						description: 'ECS cluster that owns notebook tasks.',
+						example: 'marimohub-prod',
+						required: true,
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_TASK_DEFINITION',
+						name: 'Fargate task definition',
+						description:
+							'Existing ECS task-definition revision or ARN. It pins the image, runs the standalone agent as non-root, and defines the notebook task role.',
+						example: 'marimohub-kernel:12',
+						required: true,
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_CONTAINER_NAME',
+						name: 'Fargate container name',
+						description: 'Task-definition container that runs the agent.',
+						default: 'marimo',
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_SUBNETS',
+						name: 'Fargate subnets',
+						description: 'Comma-separated private subnet IDs for task ENIs.',
+						example: 'subnet-0123,subnet-0456',
+						required: true,
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_SECURITY_GROUPS',
+						name: 'Fargate security groups',
+						description:
+							'Comma-separated security group IDs for agent and kernel traffic from the hub.',
+						example: 'sg-0123456789abcdef0',
+						required: true,
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_ASSIGN_PUBLIC_IP',
+						name: 'Assign public IP',
+						description: 'Whether ECS assigns a public IP to each task ENI.',
+						default: 'false',
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_PLATFORM_VERSION',
+						name: 'Fargate platform version',
+						description: 'Fargate platform version for RunTask.',
+						default: 'LATEST',
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_OWNER',
+						name: 'Fargate deployment owner',
+						description: 'Unique deployment key used in startedBy and task tags.',
+						example: 'prod-hub-a',
+						required: true,
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_AGENT_SECRET',
+						name: 'Fargate agent master secret',
+						description: 'Secret used to derive agent tokens. Minimum length: 32 bytes.',
+						required: true,
+						secret: true,
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_AGENT_PORT',
+						name: 'Fargate agent port',
+						description: 'Private task port for the agent.',
+						default: '2717',
+					},
+					{
+						id: 'MARIMOHUB_COMPUTE_FARGATE_READY_TIMEOUT_SECONDS',
+						name: 'Fargate ready timeout (seconds)',
+						description: 'Seconds to wait for a running task, private ENI, and healthy agent.',
+						default: '120',
+					},
+				],
+			},
+			{
 				name: 'Kubernetes',
 				selectorValue: 'kubernetes',
 				supportsComputeProfiles: true,

@@ -100,7 +100,7 @@ _No environment variables to set here._
 
 ## Compute
 
-Selected by `MARIMOHUB_COMPUTE_BACKEND`; one of `coreweave`, `wandb`, `modal`, `docker`, `podman`, `e2b`, `kubernetes`, `local`, `library`, `none`.
+Selected by `MARIMOHUB_COMPUTE_BACKEND`; one of `coreweave`, `wandb`, `modal`, `docker`, `podman`, `e2b`, `fargate`, `kubernetes`, `local`, `library`, `none`.
 
 Where notebook kernels run. The shared variables apply across compute backends.
 
@@ -217,6 +217,26 @@ E2B sandboxes (e2b.dev). The `e2b` SDK is an optional, bring-your-own dependency
 | `MARIMOHUB_COMPUTE_E2B_DOMAIN` | Custom E2B domain (self-hosted/enterprise); defaults to `e2b.app`. | — | — | — |
 | `MARIMOHUB_COMPUTE_E2B_OWNER_TAG` | Metadata tag applied to owned sandboxes for discovery and cleanup. | — | `marimohub` | — |
 | `MARIMOHUB_COMPUTE_E2B_MAX_LIFETIME_SECONDS` | Hard provider-side sandbox lifetime cap (E2B auto-kills past it, no save) — an orphan backstop behind the graceful session lifetime (`MARIMOHUB_SESSION_MAX_LIFETIME_SECONDS`). Must be >= the session lifetime; leave unset to default to 2x it. | — | `2x MARIMOHUB_SESSION_MAX_LIFETIME_SECONDS` | `28800` |
+
+### AWS ECS Fargate
+
+`MARIMOHUB_COMPUTE_BACKEND=fargate`
+
+Runs one Linux Fargate task per sandbox. The hub connects through private task ENIs. This backend requires proxy exposure and uses on-demand capacity.
+
+| Variable | Description | Required | Default | Example |
+| --- | --- | --- | --- | --- |
+| `MARIMOHUB_COMPUTE_FARGATE_CLUSTER` | ECS cluster that owns notebook tasks. | Yes | — | `marimohub-prod` |
+| `MARIMOHUB_COMPUTE_FARGATE_TASK_DEFINITION` | Existing ECS task-definition revision or ARN. It pins the image, runs the standalone agent as non-root, and defines the notebook task role. | Yes | — | `marimohub-kernel:12` |
+| `MARIMOHUB_COMPUTE_FARGATE_CONTAINER_NAME` | Task-definition container that runs the agent. | — | `marimo` | — |
+| `MARIMOHUB_COMPUTE_FARGATE_SUBNETS` | Comma-separated private subnet IDs for task ENIs. | Yes | — | `subnet-0123,subnet-0456` |
+| `MARIMOHUB_COMPUTE_FARGATE_SECURITY_GROUPS` | Comma-separated security group IDs for agent and kernel traffic from the hub. | Yes | — | `sg-0123456789abcdef0` |
+| `MARIMOHUB_COMPUTE_FARGATE_ASSIGN_PUBLIC_IP` | Whether ECS assigns a public IP to each task ENI. | — | `false` | — |
+| `MARIMOHUB_COMPUTE_FARGATE_PLATFORM_VERSION` | Fargate platform version for RunTask. | — | `LATEST` | — |
+| `MARIMOHUB_COMPUTE_FARGATE_OWNER` | Unique deployment key used in startedBy and task tags. | Yes | — | `prod-hub-a` |
+| `MARIMOHUB_COMPUTE_FARGATE_AGENT_SECRET` 🔒 | Secret used to derive agent tokens. Minimum length: 32 bytes. | Yes | — | — |
+| `MARIMOHUB_COMPUTE_FARGATE_AGENT_PORT` | Private task port for the agent. | — | `2717` | — |
+| `MARIMOHUB_COMPUTE_FARGATE_READY_TIMEOUT_SECONDS` | Seconds to wait for a running task, private ENI, and healthy agent. | — | `120` | — |
 
 ### Kubernetes
 

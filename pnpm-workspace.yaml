@@ -8,6 +8,7 @@ blockExoticSubdeps: true
 catalog:
   '@ai-sdk/openai-compatible': ^3.0.17
   '@aws-crypto/sha256-js': ^5.2.0
+  '@aws-sdk/client-ecs': ^3.1066.0
   '@aws-sdk/client-s3': ^3.1066.0
   '@aws-sdk/client-secrets-manager': ^3.1066.0
   '@aws-sdk/credential-provider-node': ^3.972.59
@@ -129,8 +130,8 @@ minimumReleaseAgeExclude:
   - nanoid
   - hono@4.12.34
   - ip-address@10.3.1
-  - js-yaml@3.15.1
-  - js-yaml@4.3.1
+  - js-yaml
+  - nodemailer
   - linkify-it@5.0.2
   - postcss
   - protobufjs@7.6.5
