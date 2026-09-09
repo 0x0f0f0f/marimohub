@@ -27,6 +27,7 @@ import {
 	defaultImagePullPolicy,
 	MANAGED_BY_LABEL,
 	MANAGED_BY_VALUE,
+	portName,
 	resolveIngressTlsMode,
 	SANDBOX_ID_ANNOTATION,
 	validateIngressAnnotations,
@@ -126,7 +127,7 @@ function podManifest(o: EnsureSandboxOptions): V1Pod {
 					// Keep-alive: the Pod idles while we exec marimo into it (see
 					// startProcess). Mirrors the CoreWeave "main process is keep-alive".
 					command: ['sh', '-c', 'sleep infinity'],
-					ports: [{ containerPort: o.port }],
+					ports: o.ports.map((p, i) => ({ containerPort: p.port, name: portName(i, p.port) })),
 					resources: buildResources(o.resources),
 				},
 			],
@@ -143,7 +144,13 @@ function serviceManifest(o: EnsureSandboxOptions): V1Service {
 		},
 		spec: {
 			selector: { [SANDBOX_NAME_LABEL]: o.name },
-			ports: [{ port: o.port, targetPort: o.port, protocol: 'TCP' }],
+			// A Service with more than one port requires a unique name on each.
+			ports: o.ports.map((p, i) => ({
+				name: portName(i, p.port),
+				port: p.port,
+				targetPort: p.port,
+				protocol: 'TCP',
+			})),
 		},
 	};
 }
@@ -153,7 +160,8 @@ function ingressTls(o: EnsureSandboxOptions): V1IngressTLS[] | undefined {
 	if (mode === 'disabled') return undefined;
 	if (mode === 'controller-default') return [{}];
 	if (!o.tlsSecretName) throw new Error('Ingress TLS mode "secret" requires a TLS secret name');
-	return [{ hosts: [o.host], secretName: o.tlsSecretName }];
+	const hosts = [...new Set(o.ports.filter((p) => p.host).map((p) => p.host))];
+	return [{ hosts, secretName: o.tlsSecretName }];
 }
 
 function ingressManifest(o: EnsureSandboxOptions): V1Ingress {
@@ -167,20 +175,20 @@ function ingressManifest(o: EnsureSandboxOptions): V1Ingress {
 		spec: {
 			ingressClassName: o.ingressClassName,
 			tls: ingressTls(o),
-			rules: [
-				{
-					host: o.host,
+			rules: o.ports
+				.filter((p) => p.host)
+				.map((p) => ({
+					host: p.host,
 					http: {
 						paths: [
 							{
 								path: '/',
 								pathType: 'Prefix',
-								backend: { service: { name: o.name, port: { number: o.port } } },
+								backend: { service: { name: o.name, port: { number: p.port } } },
 							},
 						],
 					},
-				},
-			],
+				})),
 		},
 	};
 }
@@ -303,18 +311,56 @@ export function createK8sClient(config: KubernetesConfig): K8sClient {
 		}
 	}
 
+	async function reconcileService(core: K8s.CoreV1Api, desired: V1Service): Promise<void> {
+		try {
+			await core.createNamespacedService({ namespace, body: desired });
+			return;
+		} catch (err) {
+			if (!hasCode(err, 409)) throw err;
+		}
+
+		const metadata = desired.metadata;
+		const name = metadata?.name;
+		if (!metadata || !name) throw new Error('Cannot reconcile a Service without a name');
+		const desiredLabels = metadata.labels;
+		for (let attempt = 0; attempt < 3; attempt++) {
+			const existing = await core.readNamespacedService({ name, namespace });
+			if (existing.metadata?.labels?.[MANAGED_BY_LABEL] !== MANAGED_BY_VALUE) {
+				throw new Error(`Refusing to replace unmanaged Service "${name}"`);
+			}
+			const resourceVersion = existing.metadata.resourceVersion;
+			if (!resourceVersion) throw new Error(`Service "${name}" has no resourceVersion`);
+			metadata.resourceVersion = resourceVersion;
+			metadata.labels = { ...existing.metadata.labels, ...desiredLabels };
+			metadata.finalizers = existing.metadata.finalizers;
+			metadata.ownerReferences = existing.metadata.ownerReferences;
+			// clusterIP is immutable; a replace must carry the assigned value forward.
+			if (desired.spec) {
+				desired.spec.clusterIP = existing.spec?.clusterIP;
+				desired.spec.clusterIPs = existing.spec?.clusterIPs;
+			}
+			try {
+				await core.replaceNamespacedService({ name, namespace, body: desired });
+				return;
+			} catch (err) {
+				if (!hasCode(err, 409) || attempt === 2) throw err;
+			}
+		}
+	}
+
 	return {
 		async ensure(o: EnsureSandboxOptions): Promise<{ createdPod: boolean }> {
 			const pod = podManifest(o);
 			const service = serviceManifest(o);
-			const ingress = o.host ? ingressManifest(o) : undefined;
+			const ingress = o.ports.some((p) => p.host) ? ingressManifest(o) : undefined;
 			const { core, net } = await apis();
 			// Order-independent: k8s is declarative (a Service's selector / an
-			// Ingress's backend need not pre-exist), so the creates fan out.
+			// Ingress's backend need not pre-exist), so the creates fan out. The
+			// Service and Ingress reconcile so a reconnect picks up newly reserved
+			// surface ports rather than swallowing the create conflict.
 			const [createdPod] = await Promise.all([
 				createTolerant(() => core.createNamespacedPod({ namespace, body: pod })),
-				createTolerant(() => core.createNamespacedService({ namespace, body: service })),
-				// No host configured → no Ingress (the URL will be unroutable; documented).
+				reconcileService(core, service),
 				ingress ? reconcileIngress(net, ingress) : undefined,
 			]);
 			return { createdPod };

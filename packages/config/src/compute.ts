@@ -12,6 +12,7 @@ import { FargateCompute, validateFargateTaskDefinition } from '@marimo-hub/compu
 import {
 	KubernetesCompute,
 	parseIngressAnnotations,
+	portRoutingCollision,
 	resolveIngressTlsMode,
 	validateIngressTlsHostnameTemplate,
 } from '@marimo-hub/compute-kubernetes';
@@ -451,7 +452,35 @@ export function makeCompute(env: Env, opts?: ComputeOptions): SandboxProvider {
 			const pullPolicy = env.MARIMOHUB_COMPUTE_KUBERNETES_IMAGE_PULL_POLICY;
 			const proxyExposure = opts?.sandboxExposureMode === 'proxy';
 			const ingressTlsMode = proxyExposure ? undefined : kubernetesIngressTlsMode(env);
-			const hostnameTemplate = env.MARIMOHUB_COMPUTE_KUBERNETES_HOSTNAME_TEMPLATE;
+			const ports = surfacePorts(opts?.surfaces);
+			const customTemplate = env.MARIMOHUB_COMPUTE_KUBERNETES_HOSTNAME_TEMPLATE;
+			// Each surface port needs its own subdomain, so the default becomes port-aware.
+			const hostnameTemplate =
+				customTemplate ??
+				(!proxyExposure && ports.length > 0 ? 'https://{id}-{port}.{host}' : undefined);
+			// Reject templates that route two ports to the same destination — {port} only
+			// in the path (subdomain) or a hardcoded port (proxy) collides a surface onto
+			// the kernel. Validated against rendered URLs, so it can't diverge from routing.
+			if (ports.length > 0) {
+				const collision = portRoutingCollision({
+					exposureMode: opts?.sandboxExposureMode,
+					hostname: proxyExposure ? undefined : env.MARIMOHUB_COMPUTE_SANDBOX_HOSTNAME,
+					hostnameTemplate,
+					surfacePorts: ports,
+				});
+				if (collision) {
+					const [a, b] = collision.ports;
+					throw new ConfigError(
+						`Invalid MARIMOHUB_COMPUTE_KUBERNETES_HOSTNAME_TEMPLATE for secondary surfaces: ` +
+							`ports ${a} and ${b} both resolve to ${collision.destination}`,
+						{
+							variable: 'MARIMOHUB_COMPUTE_KUBERNETES_HOSTNAME_TEMPLATE',
+							remediation:
+								'Route each port to a distinct destination — include {port} in the subdomain host, e.g. https://{id}-{port}.{host}.',
+						},
+					);
+				}
+			}
 			// Proxy exposure publishes no Ingress, so a template built on the public
 			// host (the subdomain default) would yield a URL with nothing behind it.
 			if (proxyExposure && hostnameTemplate && /\{host\}|\{token\}/.test(hostnameTemplate)) {
@@ -478,6 +507,7 @@ export function makeCompute(env: Env, opts?: ComputeOptions): SandboxProvider {
 				exposureMode: opts?.sandboxExposureMode,
 				namespace: env.MARIMOHUB_COMPUTE_KUBERNETES_NAMESPACE,
 				image: defaultImage,
+				surfacePorts: ports,
 				hostname: proxyExposure ? undefined : env.MARIMOHUB_COMPUTE_SANDBOX_HOSTNAME,
 				hostnameTemplate,
 				ingressClassName: proxyExposure

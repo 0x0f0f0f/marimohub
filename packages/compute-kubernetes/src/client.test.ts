@@ -10,6 +10,8 @@ const k8sMock = vi.hoisted(() => {
 	const core = {
 		createNamespacedPod: vi.fn(),
 		createNamespacedService: vi.fn(),
+		readNamespacedService: vi.fn(),
+		replaceNamespacedService: vi.fn(),
 		readNamespacedPod: vi.fn(),
 		listNamespacedEvent: vi.fn(),
 		deleteNamespacedService: vi.fn(),
@@ -69,6 +71,8 @@ beforeEach(() => {
 	for (const fn of [
 		k8sMock.core.createNamespacedPod,
 		k8sMock.core.createNamespacedService,
+		k8sMock.core.readNamespacedService,
+		k8sMock.core.replaceNamespacedService,
 		k8sMock.core.readNamespacedPod,
 		k8sMock.core.listNamespacedEvent,
 		k8sMock.core.deleteNamespacedService,
@@ -95,9 +99,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: 'sb.example.com',
 				image: 'kernel-image:v1',
-				port: 2718,
+				ports: [{ port: 2718, host: 'sb.example.com' }],
 				namespace: 'kernels',
 				ingressClassName: 'nginx',
 				ingressAnnotations: {
@@ -131,7 +134,7 @@ describe('createK8sClient', () => {
 						image: 'kernel-image:v1',
 						// Pinned tag → cached nodes skip the registry round-trip.
 						imagePullPolicy: 'IfNotPresent',
-						ports: [{ containerPort: 2718 }],
+						ports: [{ containerPort: 2718, name: 'kernel' }],
 						resources: {
 							requests: { cpu: '2', memory: '4Gi' },
 							limits: { 'nvidia.com/gpu': '1' },
@@ -157,14 +160,70 @@ describe('createK8sClient', () => {
 		expect(k8sMock.net.replaceNamespacedIngress).not.toHaveBeenCalled();
 	});
 
+	it('names every port and routes a rule per hosted port with multiple surfaces', async () => {
+		const client = createK8sClient({ namespace: 'kernels' });
+		await client.ensure({
+			name: 'mh-sb',
+			sandboxId: SANDBOX_ID,
+			image: 'kernel-image:v1',
+			ports: [
+				{ port: 2718, host: 'sb-2718.example.com' },
+				{ port: 8443, host: 'sb-8443.example.com' },
+			],
+			namespace: 'kernels',
+			ingressClassName: 'nginx',
+			tlsSecretName: 'wildcard-cert',
+		});
+
+		const pod = k8sMock.core.createNamespacedPod.mock.calls[0]?.[0].body;
+		expect(pod.spec.containers[0].ports).toEqual([
+			{ containerPort: 2718, name: 'kernel' },
+			{ containerPort: 8443, name: 'port-8443' },
+		]);
+		const service = k8sMock.core.createNamespacedService.mock.calls[0]?.[0].body;
+		expect(service.spec.ports).toEqual([
+			{ name: 'kernel', port: 2718, targetPort: 2718, protocol: 'TCP' },
+			{ name: 'port-8443', port: 8443, targetPort: 8443, protocol: 'TCP' },
+		]);
+		const ingress = k8sMock.net.createNamespacedIngress.mock.calls[0]?.[0].body;
+		expect(ingress.spec.tls).toEqual([
+			{ hosts: ['sb-2718.example.com', 'sb-8443.example.com'], secretName: 'wildcard-cert' },
+		]);
+		expect(ingress.spec.rules).toEqual([
+			{
+				host: 'sb-2718.example.com',
+				http: {
+					paths: [
+						{
+							path: '/',
+							pathType: 'Prefix',
+							backend: { service: { name: 'mh-sb', port: { number: 2718 } } },
+						},
+					],
+				},
+			},
+			{
+				host: 'sb-8443.example.com',
+				http: {
+					paths: [
+						{
+							path: '/',
+							pathType: 'Prefix',
+							backend: { service: { name: 'mh-sb', port: { number: 8443 } } },
+						},
+					],
+				},
+			},
+		]);
+	});
+
 	it('preserves the legacy default alias for the ingress-controller certificate', async () => {
 		const client = createK8sClient({ namespace: 'kernels' });
 		await client.ensure({
 			name: 'mh-sb',
 			sandboxId: SANDBOX_ID,
-			host: 'sb.example.com',
 			image: 'kernel-image:v1',
-			port: 2718,
+			ports: [{ port: 2718, host: 'sb.example.com' }],
 			namespace: 'kernels',
 			ingressTlsMode: 'default',
 		});
@@ -190,9 +249,8 @@ describe('createK8sClient', () => {
 		await client.ensure({
 			name: 'mh-sb',
 			sandboxId: SANDBOX_ID,
-			host: 'sb.example.com',
 			image: 'kernel-image:v1',
-			port: 2718,
+			ports: [{ port: 2718, host: 'sb.example.com' }],
 			namespace: 'kernels',
 			ingressAnnotations: { 'route.openshift.io/termination': 'edge' },
 			ingressTlsMode: 'controller-default',
@@ -220,6 +278,47 @@ describe('createK8sClient', () => {
 		});
 	});
 
+	it('reconciles an existing managed service so a reconnect gains new surface ports', async () => {
+		k8sMock.core.createNamespacedService.mockRejectedValueOnce({ code: 409 });
+		k8sMock.core.readNamespacedService.mockResolvedValueOnce({
+			metadata: {
+				name: 'mh-sb',
+				resourceVersion: '9',
+				labels: { [MANAGED_BY_LABEL]: MANAGED_BY_VALUE },
+			},
+			spec: { clusterIP: '10.0.0.7', clusterIPs: ['10.0.0.7'], ports: [{ port: 2718 }] },
+		});
+		const client = createK8sClient({ namespace: 'kernels' });
+
+		await client.ensure({
+			name: 'mh-sb',
+			sandboxId: SANDBOX_ID,
+			image: 'kernel-image:v1',
+			ports: [
+				{ port: 2718, host: 'sb.example.com' },
+				{ port: 8443, host: 'sb-8443.example.com' },
+			],
+			namespace: 'kernels',
+		});
+
+		expect(k8sMock.core.readNamespacedService).toHaveBeenCalledWith({
+			name: 'mh-sb',
+			namespace: 'kernels',
+		});
+		expect(k8sMock.core.replaceNamespacedService).toHaveBeenCalledWith({
+			name: 'mh-sb',
+			namespace: 'kernels',
+			body: expect.objectContaining({
+				metadata: expect.objectContaining({ resourceVersion: '9' }),
+				spec: expect.objectContaining({
+					// clusterIP carried forward (immutable); ports now include the surface.
+					clusterIP: '10.0.0.7',
+					ports: [expect.objectContaining({ port: 2718 }), expect.objectContaining({ port: 8443 })],
+				}),
+			}),
+		});
+	});
+
 	it('refuses to replace an unmanaged ingress', async () => {
 		k8sMock.net.createNamespacedIngress.mockRejectedValueOnce({ code: 409 });
 		k8sMock.net.readNamespacedIngress.mockResolvedValueOnce({
@@ -231,9 +330,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: 'sb.example.com',
 				image: 'kernel-image:v1',
-				port: 2718,
+				ports: [{ port: 2718, host: 'sb.example.com' }],
 				namespace: 'kernels',
 			}),
 		).rejects.toThrow(/unmanaged Ingress/);
@@ -251,9 +349,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: 'sb.example.com',
 				image: 'kernel-image:v1',
-				port: 2718,
+				ports: [{ port: 2718, host: 'sb.example.com' }],
 				namespace: 'kernels',
 			}),
 		).rejects.toThrow(/has no resourceVersion/);
@@ -284,9 +381,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: 'sb.example.com',
 				image: 'kernel-image:v1',
-				port: 2718,
+				ports: [{ port: 2718, host: 'sb.example.com' }],
 				namespace: 'kernels',
 			}),
 		).resolves.toEqual({ createdPod: true });
@@ -310,9 +406,8 @@ describe('createK8sClient', () => {
 		await client.ensure({
 			name: 'mh-sb',
 			sandboxId: SANDBOX_ID,
-			host: 'sb.example.com',
 			image: 'kernel-image:v1',
-			port: 2718,
+			ports: [{ port: 2718, host: 'sb.example.com' }],
 			namespace: 'kernels',
 			ingressTlsMode: 'disabled',
 		});
@@ -332,9 +427,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: 'sb.example.com',
 				image: 'kernel-image:v1',
-				port: 2718,
+				ports: [{ port: 2718, host: 'sb.example.com' }],
 				namespace: 'kernels',
 				ingressAnnotations: { [key]: 'value' },
 			}),
@@ -350,9 +444,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: 'sb.example.com',
 				image: 'kernel-image:v1',
-				port: 2718,
+				ports: [{ port: 2718, host: 'sb.example.com' }],
 				namespace: 'kernels',
 				ingressAnnotations: { name: 'x'.repeat(256 * 1024) },
 			}),
@@ -365,9 +458,8 @@ describe('createK8sClient', () => {
 		await client.ensure({
 			name: 'mh-sb',
 			sandboxId: SANDBOX_ID,
-			host: 'sb.example.com',
 			image: 'kernel-image:v1',
-			port: 2718,
+			ports: [{ port: 2718, host: 'sb.example.com' }],
 			namespace: 'kernels',
 			ingressTlsMode: 'disabled',
 		});
@@ -382,9 +474,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: 'sb.example.com',
 				image: 'kernel-image:v1',
-				port: 2718,
+				ports: [{ port: 2718, host: 'sb.example.com' }],
 				namespace: 'kernels',
 				ingressTlsMode: 'secret',
 			}),
@@ -400,9 +491,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: '',
 				image: 'kernel-image',
-				port: 2718,
+				ports: [{ port: 2718, host: '' }],
 				namespace: 'default',
 			}),
 		).resolves.toEqual({ createdPod: true });
@@ -415,9 +505,8 @@ describe('createK8sClient', () => {
 		await client.ensure({
 			name: 'mh-sb',
 			sandboxId: SANDBOX_ID,
-			host: '',
 			image: 'kernel-image:v1',
-			port: 2718,
+			ports: [{ port: 2718, host: '' }],
 			namespace: 'default',
 			imagePullPolicy: 'Always',
 		});
@@ -433,9 +522,8 @@ describe('createK8sClient', () => {
 		await client.ensure({
 			name: 'mh-sb',
 			sandboxId: SANDBOX_ID,
-			host: '',
 			image: 'ghcr.io/marimo-team/marimo:latest',
-			port: 2718,
+			ports: [{ port: 2718, host: '' }],
 			namespace: 'default',
 		});
 		const pod = k8sMock.core.createNamespacedPod.mock.calls[0]?.[0].body;
@@ -455,9 +543,8 @@ describe('createK8sClient', () => {
 		await client.ensure({
 			name: 'mh-sb',
 			sandboxId: SANDBOX_ID,
-			host: '',
 			image: 'kernel-image',
-			port: 2718,
+			ports: [{ port: 2718, host: '' }],
 			namespace: 'default',
 			resources: {
 				cpu: '2',
@@ -701,9 +788,8 @@ describe('createK8sClient', () => {
 			client.ensure({
 				name: 'mh-sb',
 				sandboxId: SANDBOX_ID,
-				host: '',
 				image: 'kernel-image',
-				port: 2718,
+				ports: [{ port: 2718, host: '' }],
 				namespace: 'kernels',
 			}),
 		).rejects.toMatchObject({ code: 403 });

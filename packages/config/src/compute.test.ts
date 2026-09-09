@@ -13,6 +13,7 @@ import {
 	resolveSandboxImages,
 	usesSandboxNativeObjectStorage,
 } from './compute';
+import { surfacesFromEnv } from './surfaces';
 import { ConfigError } from './errors';
 
 function getConfigError(run: () => unknown): ConfigError {
@@ -44,6 +45,7 @@ const configOf = (provider: unknown) =>
 				hostname?: string;
 				hostnameTemplate?: string;
 				ingressClassName?: string;
+				surfacePorts?: readonly number[];
 			};
 		}
 	).config;
@@ -406,6 +408,38 @@ describe('makeCompute fail-fast', () => {
 		expect(configOf(makeCompute({ MARIMOHUB_COMPUTE_BACKEND: 'kubernetes' }))).toMatchObject({
 			ingressTlsMode: 'controller-default',
 		});
+	});
+
+	it('reserves surface ports and advertises multiPort for kubernetes with a surface', () => {
+		const surfaces = surfacesFromEnv({ MARIMOHUB_SURFACES: 'marimo,vscode' });
+		const compute = makeCompute(
+			{
+				MARIMOHUB_COMPUTE_BACKEND: 'kubernetes',
+				MARIMOHUB_COMPUTE_SANDBOX_HOSTNAME: 'kernels.example.com',
+			},
+			{ surfaces },
+		);
+		expect(compute.capabilities).toEqual({ multiPort: true });
+		expect(configOf(compute)).toMatchObject({
+			surfacePorts: [8443],
+			hostnameTemplate: 'https://{id}-{port}.{host}',
+		});
+	});
+
+	it('rejects a kubernetes subdomain template whose ports share a destination', () => {
+		const surfaces = surfacesFromEnv({ MARIMOHUB_SURFACES: 'marimo,vscode' });
+		const error = getConfigError(() =>
+			makeCompute(
+				{
+					MARIMOHUB_COMPUTE_BACKEND: 'kubernetes',
+					MARIMOHUB_COMPUTE_SANDBOX_HOSTNAME: 'kernels.example.com',
+					MARIMOHUB_COMPUTE_KUBERNETES_HOSTNAME_TEMPLATE: 'https://{id}.{host}',
+				},
+				{ surfaces },
+			),
+		);
+		expect(error.message).toMatch(/both resolve to/);
+		expect(error.opts.variable).toBe('MARIMOHUB_COMPUTE_KUBERNETES_HOSTNAME_TEMPLATE');
 	});
 
 	it('requires URL schemes that match the kubernetes ingress TLS mode', () => {
