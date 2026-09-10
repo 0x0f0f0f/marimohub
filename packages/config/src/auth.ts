@@ -328,9 +328,21 @@ function parseLoginPolicy(
 	};
 }
 
-function parseGroupPolicy(env: Env): OidcGroupPolicy | undefined {
-	const claim = env.MARIMOHUB_AUTH_OIDC_GROUPS_CLAIM?.trim();
+function parseLoginAllowedGroups(env: Env): string[] | undefined {
 	const allowed = checkedGroups(env, 'MARIMOHUB_AUTH_OIDC_ALLOWED_GROUPS');
+	if (env.MARIMOHUB_AUTH_OIDC_ALLOWED_GROUPS !== undefined && !allowed) {
+		throw new ConfigError('MARIMOHUB_AUTH_OIDC_ALLOWED_GROUPS is set but lists no groups.', {
+			variable: 'MARIMOHUB_AUTH_OIDC_ALLOWED_GROUPS',
+			remediation:
+				'List at least one group ID, or unset the variable to disable the login group restriction.',
+			docs: 'docs/setup/auth/oidc.md',
+		});
+	}
+	return allowed;
+}
+
+function parseGroupPolicy(env: Env, allowed: string[] | undefined): OidcGroupPolicy | undefined {
+	const claim = env.MARIMOHUB_AUTH_OIDC_GROUPS_CLAIM?.trim();
 	const superAdmin = checkedGroups(env, 'MARIMOHUB_AUTH_OIDC_SUPER_ADMIN_GROUPS');
 	const projectCreation = checkedGroups(env, 'MARIMOHUB_AUTH_OIDC_PROJECT_CREATION_GROUPS');
 	const viewer = checkedGroups(env, 'MARIMOHUB_AUTH_OIDC_DEFAULT_VIEWER_GROUPS');
@@ -434,8 +446,9 @@ export function makeAuth(
 	if (backend !== 'oidc') assertNoLoginPolicyVars(env, backend);
 	switch (backend) {
 		case 'oidc': {
+			const allowedGroups = parseLoginAllowedGroups(env);
 			const loginPolicy = parseLoginPolicy(env, libraries);
-			const groups = loginPolicy ? undefined : parseGroupPolicy(env);
+			const groups = loginPolicy ? undefined : parseGroupPolicy(env, allowedGroups);
 			const sessionTtlSeconds = parseSeconds(
 				env,
 				'MARIMOHUB_AUTH_SESSION_TTL_SECONDS',

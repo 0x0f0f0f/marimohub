@@ -46,8 +46,9 @@ import type {
 
 /** How often the notebook table re-polls runtime status, in ms. */
 const SESSIONS_POLL_INTERVAL_MS = 30_000;
-/** How often job run queries re-poll while a run is still in progress, in ms. */
+/** Refresh cadence for job history and active run details. */
 const RUNS_POLL_INTERVAL_MS = 5_000;
+const IDLE_RUNS_POLL_INTERVAL_MS = 60_000;
 
 /**
  * Deployment-scoped facts (identity, version, capabilities): fixed for the life
@@ -1839,10 +1840,7 @@ export function useTriggerJobRun(projectId: string, notebookId: string) {
 	);
 }
 
-/**
- * A job's runs, newest first, polling while any run is still in progress so the
- * history table follows a queued → running → terminal run without a reload.
- */
+/** Poll even an empty history: scheduled and externally triggered runs can arrive at any time. */
 export function useJobRunsQuery(projectId: string, notebookId: string, jobId: string | null) {
 	return useInfiniteQuery({
 		queryKey: jobKeys.runs(projectId, notebookId, jobId ?? ''),
@@ -1862,7 +1860,7 @@ export function useJobRunsQuery(projectId: string, notebookId: string, jobId: st
 		refetchInterval: (query) =>
 			query.state.data?.pages.some((page) => page.items.some((run) => !isTerminalRun(run)))
 				? RUNS_POLL_INTERVAL_MS
-				: false,
+				: IDLE_RUNS_POLL_INTERVAL_MS,
 	});
 }
 
